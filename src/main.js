@@ -154,19 +154,36 @@ function resetHover() {
 }
 
 // Placement logic
-function snapToGrid(pos) {
+function snapToGrid(intersect) {
   const [w, d] = currentPiece.split('x').map(Number);
   const snap = UNIT_SIZE;
-  return new THREE.Vector3(
-    Math.round(pos.x / snap) * snap,
-    pieces.length * BRICK_HEIGHT * 0.5, // Stack height
-    Math.round(pos.z / snap) * snap
-  );
+
+  // Push slightly out along the normal to determine the right grid space
+  const p = intersect.point.clone().add(intersect.normal.clone().multiplyScalar(0.1));
+
+  // Snap laterally
+  const x = Math.round(p.x / snap) * snap;
+  const z = Math.round(p.z / snap) * snap;
+
+  // Snap vertically
+  // If we clicked the ground plane, y should be BRICK_HEIGHT / 2
+  // If we clicked a brick, it depends whether we clicked its top, side, or bottom
+  let y = BRICK_HEIGHT / 2;
+
+  if (intersect.object.type !== 'PlaneHelper' && intersect.object.geometry.type !== 'PlaneGeometry') {
+    // If we're hitting another brick, we align to multiples of PLATE_HEIGHT.
+    // The bottom of the new piece should sit at the rounded multiple of PLATE_HEIGHT.
+    // Since piece origin is at its center, y is bottomY + BRICK_HEIGHT / 2.
+    const bottomY = Math.floor(p.y / PLATE_HEIGHT) * PLATE_HEIGHT;
+    y = bottomY + BRICK_HEIGHT / 2;
+  }
+
+  return new THREE.Vector3(x, y, z);
 }
 
-function placeBrick(point) {
+function placeBrick(intersect) {
   const [w, d] = currentPiece.split('x').map(Number);
-  const pos = snapToGrid(point);
+  const pos = snapToGrid(intersect);
   const brick = createLegoPiece(w, d, false);
   brick.position.copy(pos);
   scene.add(brick);
@@ -220,10 +237,9 @@ window.addEventListener('mousemove', (e) => {
       resetHover();
     }
   } else {
-    const intersects = raycaster.intersectObjects(scene.children, true);
+    const intersects = raycaster.intersectObjects([plane, ...pieces], true);
     if (intersects.length > 0 && previewMesh) {
-      const point = snapToGrid(intersects[0].point);
-      point.y += BRICK_HEIGHT / 2;
+      const point = snapToGrid(intersects[0]);
       previewMesh.position.copy(point);
     }
   }
@@ -251,7 +267,7 @@ window.addEventListener('click', (e) => {
   } else {
     const intersects = raycaster.intersectObjects([plane, ...pieces], true);
     if (intersects.length > 0) {
-      placeBrick(intersects[0].point);
+      placeBrick(intersects[0]);
     }
   }
 });
