@@ -179,9 +179,6 @@ function snapToGrid(intersect) {
   let xOffset = (effectiveW % 2 !== 0) ? snap / 2 : 0;
   let zOffset = (effectiveD % 2 !== 0) ? snap / 2 : 0;
 
-  const x = Math.round((p.x - xOffset) / snap) * snap + xOffset;
-  const z = Math.round((p.z - zOffset) / snap) * snap + zOffset;
-
   // Snap vertically
   // If we clicked the ground plane, y should be BRICK_HEIGHT / 2
   // If we clicked a brick, it depends whether we clicked its top, side, or bottom
@@ -200,12 +197,28 @@ function snapToGrid(intersect) {
       const baseY = baseBrick.position.y;
       const baseHeight = baseBrick.userData.physicalHeight;
       y = baseY + (baseHeight / 2) + (actualHeight / 2);
+    } else if (intersect.normal.y < -0.5) {
+      // Snapping to the bottom of another brick (rare)
+      const baseY = baseBrick.position.y;
+      const baseHeight = baseBrick.userData.physicalHeight;
+      y = baseY - (baseHeight / 2) - (actualHeight / 2);
     } else {
       // Snapping to the side of another brick
       const bottomY = Math.floor(p.y / PLATE_HEIGHT) * PLATE_HEIGHT;
       y = bottomY + actualHeight / 2;
+
+      // Bump outward based on normal so it doesn't clip inside
+      if (Math.abs(intersect.normal.x) > 0.5) {
+        p.x += Math.sign(intersect.normal.x) * (effectiveW * snap / 2);
+      }
+      if (Math.abs(intersect.normal.z) > 0.5) {
+        p.z += Math.sign(intersect.normal.z) * (effectiveD * snap / 2);
+      }
     }
   }
+
+  const x = Math.round((p.x - xOffset) / snap) * snap + xOffset;
+  const z = Math.round((p.z - zOffset) / snap) * snap + zOffset;
 
   return new THREE.Vector3(x, y, z);
 }
@@ -217,6 +230,46 @@ function placeBrick(intersect) {
   brick.position.copy(pos);
   scene.add(brick);
   pieces.push(brick);
+}
+
+// Bounding box logic for strict anti-penetration
+function getLogicalBounds(brick) {
+  const isRotated = Math.abs(brick.rotation.y % Math.PI) > 0.1;
+  const w = isRotated ? brick.userData.depth : brick.userData.width;
+  const d = isRotated ? brick.userData.width : brick.userData.depth;
+  const h = brick.userData.physicalHeight;
+
+  const widthSize = w * UNIT_SIZE;
+  const depthSize = d * UNIT_SIZE;
+
+  // Tiny epsilon to allow touching exactly
+  const eps = 0.05;
+
+  return {
+    minX: brick.position.x - widthSize / 2 + eps,
+    maxX: brick.position.x + widthSize / 2 - eps,
+    minY: brick.position.y - h / 2 + eps,
+    maxY: brick.position.y + h / 2 - eps,
+    minZ: brick.position.z - depthSize / 2 + eps,
+    maxZ: brick.position.z + depthSize / 2 - eps
+  };
+}
+
+function checkCollision(testBrick) {
+  const b1 = getLogicalBounds(testBrick);
+
+  for (const piece of pieces) {
+    if (piece === testBrick) continue;
+    const b2 = getLogicalBounds(piece);
+
+    // Check AABB intersection
+    if (b1.minX < b2.maxX && b1.maxX > b2.minX &&
+      b1.minY < b2.maxY && b1.maxY > b2.minY &&
+      b1.minZ < b2.maxZ && b1.maxZ > b2.minZ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Mouse events
@@ -262,6 +315,20 @@ window.addEventListener('mousemove', (e) => {
     if (intersects.length > 0 && previewMesh) {
       const point = snapToGrid(intersects[0]);
       previewMesh.position.copy(point);
+
+      const colliding = checkCollision(previewMesh);
+      previewMesh.userData.isColliding = colliding;
+      previewMesh.traverse(c => {
+        if (c.isMesh && c.material) {
+          if (colliding) {
+            c.material.color.setHex(0xff0000);
+            c.material.opacity = 0.8;
+          } else {
+            c.material.color.setHex(currentColor);
+            c.material.opacity = 0.5;
+          }
+        }
+      });
     }
   }
 });
@@ -288,6 +355,7 @@ window.addEventListener('click', (e) => {
   } else {
     const intersects = raycaster.intersectObjects([plane, ...pieces], true);
     if (intersects.length > 0) {
+      if (previewMesh && previewMesh.userData.isColliding) return;
       placeBrick(intersects[0]);
     }
   }
