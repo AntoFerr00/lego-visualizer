@@ -2,6 +2,7 @@
   "name": "lego-visualizer",
   "version": "1.0.0",
   "description": "3D Lego builder - assemble official pieces",
+  "homepage": "https://antoferr00.github.io/lego-visualizer/",
   "main": "src/main.js",
   "scripts": {
     "dev": "npx vite",

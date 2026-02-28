@@ -2,6 +2,8 @@
 
 A 3D Lego builder in the browser. Click to place bricks, drag to orbit.
 
+🌐 **Play the live demo:** [https://antoferr00.github.io/lego-visualizer/](https://antoferr00.github.io/lego-visualizer/)
+
 ![Demo](https://img.shields.io/badge/demo-live-brightgreen)
 
 ## Features
