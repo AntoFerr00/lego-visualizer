@@ -122,6 +122,8 @@ controls.enableDamping = true;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let previewMesh = null;
+let rotateMode = false; // When true, clicking rotates instead of placing bricks
+let lastOrbitState = { enableRotate: true };
 
 function createPreview() {
   if (previewMesh) scene.remove(previewMesh);
@@ -158,7 +160,24 @@ function placeBrick(point) {
 }
 
 // Mouse events
+// Keyboard shortcut for rotate mode (hold R to rotate)
+window.addEventListener("keydown", (e) => {
+  if (e.key === "r" || e.key === "R") {
+    rotateMode = true;
+    controls.enabled = true; // Ensure orbit controls get mouse
+    previewMesh && (previewMesh.visible = false);
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "r" || e.key === "R") {
+    rotateMode = false;
+    previewMesh && (previewMesh.visible = true);
+  }
+});
+
 window.addEventListener('mousemove', (e) => {
+  if (rotateMode) return; // Skip preview updates when rotating
   const rect = document.getElementById('canvas').getBoundingClientRect();
   mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -173,6 +192,7 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('click', (e) => {
+  if (rotateMode) return; // Disable brick placement when rotating
   if (e.target.tagName !== 'CANVAS') return;
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObjects([plane, ...pieces], true);
