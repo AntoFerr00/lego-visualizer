@@ -1,18 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lego Visualizer</title>
   <link rel="stylesheet" href="./src/style.css">
 </head>
+
 <body>
   <div id="app">
     <div id="ui">
       <h1>🧱 Lego Visualizer</h1>
       <div id="piece-panel">
-        <h3>Pieces</h3>
-        <div id="piece-grid"></div>
+        <h3>Piece Dimensions</h3>
+
+        <div class="dimension-row">
+          <label for="piece-width">Width:</label>
+          <input type="number" id="piece-width" min="1" max="16" value="2">
+        </div>
+
+        <div class="dimension-row">
+          <label for="piece-height">Depth:</label>
+          <input type="number" id="piece-depth" min="1" max="16" value="4">
+        </div>
+
+        <div class="dimension-row">
+          <label for="piece-plate" class="checkbox-label">
+            <input type="checkbox" id="piece-plate"> Flat Plate
+          </label>
+        </div>
+
+        <div id="piece-preview-text">2 × 4 Standard</div>
       </div>
       <div id="controls">
         <button id="clear-btn">🗑️ Clear</button>
@@ -28,4 +47,5 @@
   </div>
   <script type="module" src="./src/main.js"></script>
 </body>
+
 </html>

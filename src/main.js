@@ -15,7 +15,9 @@ const COLORS = {
 };
 
 let currentColor = COLORS.red;
-let currentPiece = '2x4';
+let currentWidth = 2;
+let currentDepth = 4;
+let isPlate = false;
 let pieces = [];
 let selectedPiece = null;
 
@@ -129,8 +131,7 @@ let lastOrbitState = { enableRotate: true };
 
 function createPreview() {
   if (previewMesh) scene.remove(previewMesh);
-  const [w, d] = currentPiece.split('x').map(Number);
-  previewMesh = createLegoPiece(w, d, false);
+  previewMesh = createLegoPiece(currentWidth, currentDepth, isPlate);
   previewMesh.traverse(c => {
     if (c.material) {
       c.material = c.material.clone();
@@ -139,6 +140,12 @@ function createPreview() {
     }
   });
   scene.add(previewMesh);
+  updatePreviewText();
+}
+
+function updatePreviewText() {
+  const textEl = document.getElementById('piece-preview-text');
+  textEl.innerText = `${currentWidth} × ${currentDepth} ${isPlate ? 'Plate' : 'Standard'}`;
 }
 
 // Reset hover effect on a piece
@@ -155,7 +162,6 @@ function resetHover() {
 
 // Placement logic
 function snapToGrid(intersect) {
-  const [w, d] = currentPiece.split('x').map(Number);
   const snap = UNIT_SIZE;
 
   // Push slightly out along the normal to determine the right grid space
@@ -182,9 +188,8 @@ function snapToGrid(intersect) {
 }
 
 function placeBrick(intersect) {
-  const [w, d] = currentPiece.split('x').map(Number);
   const pos = snapToGrid(intersect);
-  const brick = createLegoPiece(w, d, false);
+  const brick = createLegoPiece(currentWidth, currentDepth, isPlate);
   brick.position.copy(pos);
   scene.add(brick);
   pieces.push(brick);
@@ -279,29 +284,23 @@ window.addEventListener('resize', () => {
 });
 
 // ===== UI SETUP =====
-const PIECES = [
-  { id: '1x1', name: '1×1', icon: '▪' },
-  { id: '1x2', name: '1×2', icon: '▭' },
-  { id: '1x4', name: '1×4', icon: '▭' },
-  { id: '2x2', name: '2×2', icon: '■' },
-  { id: '2x3', name: '2×3', icon: '■' },
-  { id: '2x4', name: '2×4', icon: '■' },
-  { id: '4x4', name: '4×4', icon: '□' },
-];
+const widthInput = document.getElementById('piece-width');
+const depthInput = document.getElementById('piece-depth');
+const plateInput = document.getElementById('piece-plate');
 
-const pieceGrid = document.getElementById('piece-grid');
-PIECES.forEach(p => {
-  const btn = document.createElement('button');
-  btn.className = 'piece-btn';
-  if (p.id === currentPiece) btn.classList.add('active');
-  btn.innerHTML = `<div class="piece-preview">${p.icon}</div><div class="piece-name">${p.name}</div>`;
-  btn.onclick = () => {
-    document.querySelectorAll('.piece-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentPiece = p.id;
-    createPreview();
-  };
-  pieceGrid.appendChild(btn);
+widthInput.addEventListener('input', (e) => {
+  currentWidth = Math.max(1, Math.min(16, parseInt(e.target.value) || 1));
+  createPreview();
+});
+
+depthInput.addEventListener('input', (e) => {
+  currentDepth = Math.max(1, Math.min(16, parseInt(e.target.value) || 1));
+  createPreview();
+});
+
+plateInput.addEventListener('change', (e) => {
+  isPlate = e.target.checked;
+  createPreview();
 });
 
 // Color picker
