@@ -23,14 +23,14 @@ let selectedPiece = null;
 function createLegoPiece(width, depth, isPlate = false) {
   const height = isPlate ? PLATE_HEIGHT : BRICK_HEIGHT;
   const group = new THREE.Group();
-  
+
   // Main brick body
   const bodyGeo = new THREE.BoxGeometry(
     width * UNIT_SIZE - 0.04,
     height,
     depth * UNIT_SIZE - 0.04
   );
-  const bodyMat = new THREE.MeshStandardMaterial({ 
+  const bodyMat = new THREE.MeshStandardMaterial({
     color: currentColor,
     roughness: 0.4,
     metalness: 0.1
@@ -39,26 +39,26 @@ function createLegoPiece(width, depth, isPlate = false) {
   body.castShadow = true;
   body.receiveShadow = true;
   group.add(body);
-  
+
   // Add studs on top
   for (let x = 0; x < width; x++) {
     for (let z = 0; z < depth; z++) {
       const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
-      const studMat = new THREE.MeshStandardMaterial({ 
+      const studMat = new THREE.MeshStandardMaterial({
         color: currentColor,
-        roughness: 0.4 
+        roughness: 0.4
       });
       const stud = new THREE.Mesh(studGeo, studMat);
       stud.position.set(
-        (x - (width-1)/2) * UNIT_SIZE,
-        height/2 + STUD_HEIGHT/2,
-        (z - (depth-1)/2) * UNIT_SIZE
+        (x - (width - 1) / 2) * UNIT_SIZE,
+        height / 2 + STUD_HEIGHT / 2,
+        (z - (depth - 1) / 2) * UNIT_SIZE
       );
       stud.castShadow = true;
       group.add(stud);
     }
   }
-  
+
   // Add tubes underneath for hollow bricks (2x+)
   if (width > 1 || depth > 1) {
     for (let x = 0; x < width - 1; x++) {
@@ -67,15 +67,15 @@ function createLegoPiece(width, depth, isPlate = false) {
         const tubeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
         const tube = new THREE.Mesh(tubeGeo, tubeMat);
         tube.position.set(
-          (x - (width-2)/2) * UNIT_SIZE,
+          (x - (width - 2) / 2) * UNIT_SIZE,
           -height * 0.1,
-          (z - (depth-2)/2) * UNIT_SIZE
+          (z - (depth - 2) / 2) * UNIT_SIZE
         );
         group.add(tube);
       }
     }
   }
-  
+
   group.userData = { width, depth, height, isPlate };
   return group;
 }
@@ -123,6 +123,8 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let previewMesh = null;
 let rotateMode = false; // When true, clicking rotates instead of placing bricks
+let deleteMode = false; // When true, clicking deletes the hovered brick
+let hoveredPiece = null; // Currently hovered piece in delete mode
 let lastOrbitState = { enableRotate: true };
 
 function createPreview() {
@@ -137,6 +139,18 @@ function createPreview() {
     }
   });
   scene.add(previewMesh);
+}
+
+// Reset hover effect on a piece
+function resetHover() {
+  if (hoveredPiece) {
+    hoveredPiece.traverse(c => {
+      if (c.isMesh && c.material) {
+        c.material.emissive.setHex(0x000000);
+      }
+    });
+    hoveredPiece = null;
+  }
 }
 
 // Placement logic
@@ -181,23 +195,64 @@ window.addEventListener('mousemove', (e) => {
   const rect = document.getElementById('canvas').getBoundingClientRect();
   mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-  
+
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-  if (intersects.length > 0 && previewMesh) {
-    const point = snapToGrid(intersects[0].point);
-    point.y += BRICK_HEIGHT / 2;
-    previewMesh.position.copy(point);
+
+  if (deleteMode) {
+    const intersects = raycaster.intersectObjects(pieces, true);
+    if (intersects.length > 0) {
+      // Find the group (the Lego brick)
+      let object = intersects[0].object;
+      while (object.parent && object.parent.type !== 'Scene') {
+        object = object.parent;
+      }
+
+      if (object !== hoveredPiece) {
+        resetHover();
+        hoveredPiece = object;
+        hoveredPiece.traverse(c => {
+          if (c.isMesh && c.material) {
+            c.material.emissive.setHex(0x333333);
+          }
+        });
+      }
+    } else {
+      resetHover();
+    }
+  } else {
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    if (intersects.length > 0 && previewMesh) {
+      const point = snapToGrid(intersects[0].point);
+      point.y += BRICK_HEIGHT / 2;
+      previewMesh.position.copy(point);
+    }
   }
 });
 
 window.addEventListener('click', (e) => {
   if (rotateMode) return; // Disable brick placement when rotating
   if (e.target.tagName !== 'CANVAS') return;
+
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects([plane, ...pieces], true);
-  if (intersects.length > 0) {
-    placeBrick(intersects[0].point);
+
+  if (deleteMode) {
+    if (hoveredPiece) {
+      scene.remove(hoveredPiece);
+      pieces = pieces.filter(p => p !== hoveredPiece);
+      resetHover();
+      // Force a new intersection check to update hover state if another brick is under the mouse
+      const rect = document.getElementById('canvas').getBoundingClientRect();
+      const tempEvent = new MouseEvent('mousemove', {
+        clientX: e.clientX,
+        clientY: e.clientY
+      });
+      window.dispatchEvent(tempEvent);
+    }
+  } else {
+    const intersects = raycaster.intersectObjects([plane, ...pieces], true);
+    if (intersects.length > 0) {
+      placeBrick(intersects[0].point);
+    }
   }
 });
 
@@ -253,6 +308,23 @@ Object.entries(COLORS).forEach(([name, hex]) => {
 document.getElementById('clear-btn').onclick = () => {
   pieces.forEach(p => scene.remove(p));
   pieces = [];
+  resetHover();
+};
+
+document.getElementById('delete-mode').onclick = (e) => {
+  deleteMode = !deleteMode;
+  e.target.classList.toggle('active', deleteMode);
+
+  if (deleteMode) {
+    previewMesh && (previewMesh.visible = false);
+    // Ensure rotate mode is off when entering delete mode
+    if (rotateMode) {
+      rotateMode = false;
+    }
+  } else {
+    previewMesh && (previewMesh.visible = !rotateMode);
+    resetHover();
+  }
 };
 
 document.getElementById('rotate-mode').onclick = () => {

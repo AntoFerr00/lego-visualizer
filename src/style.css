@@ -64,6 +64,11 @@ button {
 button:hover { transform: scale(1.02); }
 button:active { transform: scale(0.98); }
 
+#delete-mode.active {
+  background: #ff6b6b;
+  color: white;
+}
+
 #color-picker {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
