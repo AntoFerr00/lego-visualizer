@@ -18,6 +18,7 @@ let currentColor = COLORS.red;
 let currentWidth = 2;
 let currentDepth = 4;
 let currentHeight = 3;
+let currentRotation = 0; // In radians (Wait, multiples of Math.PI / 2)
 let pieces = [];
 let selectedPiece = null;
 
@@ -132,6 +133,7 @@ let lastOrbitState = { enableRotate: true };
 function createPreview() {
   if (previewMesh) scene.remove(previewMesh);
   previewMesh = createLegoPiece(currentWidth, currentDepth, currentHeight);
+  previewMesh.rotation.y = currentRotation;
   previewMesh.traverse(c => {
     if (c.material) {
       c.material = c.material.clone();
@@ -167,9 +169,18 @@ function snapToGrid(intersect) {
   // Push slightly out along the normal to determine the right grid space
   const p = intersect.point.clone().add(intersect.normal.clone().multiplyScalar(0.1));
 
-  // Snap laterally
-  const x = Math.round(p.x / snap) * snap;
-  const z = Math.round(p.z / snap) * snap;
+  // Need to handle odd width/depth offsets. If 2x4, origin is perfectly matched.
+  // If 3x3, origin is between studs, requiring 0.5 * UNIT_SIZE offset.
+  // When rotated 90 deg, width and depth swap logically.
+  const isRotated = Math.abs(currentRotation % Math.PI) > 0.1;
+  const effectiveW = isRotated ? currentDepth : currentWidth;
+  const effectiveD = isRotated ? currentWidth : currentDepth;
+
+  let xOffset = (effectiveW % 2 !== 0) ? snap / 2 : 0;
+  let zOffset = (effectiveD % 2 !== 0) ? snap / 2 : 0;
+
+  const x = Math.round((p.x - xOffset) / snap) * snap + xOffset;
+  const z = Math.round((p.z - zOffset) / snap) * snap + zOffset;
 
   // Snap vertically
   // If we clicked the ground plane, y should be BRICK_HEIGHT / 2
@@ -202,25 +213,18 @@ function snapToGrid(intersect) {
 function placeBrick(intersect) {
   const pos = snapToGrid(intersect);
   const brick = createLegoPiece(currentWidth, currentDepth, currentHeight);
+  brick.rotation.y = currentRotation;
   brick.position.copy(pos);
   scene.add(brick);
   pieces.push(brick);
 }
 
 // Mouse events
-// Keyboard shortcut for rotate mode (hold R to rotate)
+// Keyboard shortcut for rotate piece (press R to spin)
 window.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
-    rotateMode = true;
-    controls.enabled = true; // Ensure orbit controls get mouse
-    previewMesh && (previewMesh.visible = false);
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  if (e.key === "r" || e.key === "R") {
-    rotateMode = false;
-    previewMesh && (previewMesh.visible = true);
+    currentRotation += Math.PI / 2;
+    createPreview();
   }
 });
 
@@ -357,6 +361,11 @@ document.getElementById('delete-mode').onclick = (e) => {
 document.getElementById('rotate-mode').onclick = () => {
   // Toggle auto-rotate
   controls.autoRotate = !controls.autoRotate;
+};
+
+document.getElementById('rotate-piece').onclick = () => {
+  currentRotation += Math.PI / 2;
+  createPreview();
 };
 
 // Init
