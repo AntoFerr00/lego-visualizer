@@ -17,13 +17,13 @@ const COLORS = {
 let currentColor = COLORS.red;
 let currentWidth = 2;
 let currentDepth = 4;
-let isPlate = false;
+let currentHeight = 3;
 let pieces = [];
 let selectedPiece = null;
 
 // Create a Lego piece geometry
-function createLegoPiece(width, depth, isPlate = false) {
-  const height = isPlate ? PLATE_HEIGHT : BRICK_HEIGHT;
+function createLegoPiece(width, depth, heightInPlates = 3) {
+  const height = heightInPlates * PLATE_HEIGHT;
   const group = new THREE.Group();
 
   // Main brick body
@@ -78,7 +78,7 @@ function createLegoPiece(width, depth, isPlate = false) {
     }
   }
 
-  group.userData = { width, depth, height, isPlate };
+  group.userData = { width, depth, heightInPlates, physicalHeight: height };
   return group;
 }
 
@@ -131,7 +131,7 @@ let lastOrbitState = { enableRotate: true };
 
 function createPreview() {
   if (previewMesh) scene.remove(previewMesh);
-  previewMesh = createLegoPiece(currentWidth, currentDepth, isPlate);
+  previewMesh = createLegoPiece(currentWidth, currentDepth, currentHeight);
   previewMesh.traverse(c => {
     if (c.material) {
       c.material = c.material.clone();
@@ -145,7 +145,7 @@ function createPreview() {
 
 function updatePreviewText() {
   const textEl = document.getElementById('piece-preview-text');
-  textEl.innerText = `${currentWidth} × ${currentDepth} ${isPlate ? 'Plate' : 'Standard'}`;
+  textEl.innerText = `${currentWidth} × ${currentDepth} × ${currentHeight}`;
 }
 
 // Reset hover effect on a piece
@@ -174,14 +174,26 @@ function snapToGrid(intersect) {
   // Snap vertically
   // If we clicked the ground plane, y should be BRICK_HEIGHT / 2
   // If we clicked a brick, it depends whether we clicked its top, side, or bottom
-  let y = BRICK_HEIGHT / 2;
+  const actualHeight = currentHeight * PLATE_HEIGHT;
+  let y = actualHeight / 2;
 
   if (intersect.object.type !== 'PlaneHelper' && intersect.object.geometry.type !== 'PlaneGeometry') {
-    // If we're hitting another brick, we align to multiples of PLATE_HEIGHT.
-    // The bottom of the new piece should sit at the rounded multiple of PLATE_HEIGHT.
-    // Since piece origin is at its center, y is bottomY + BRICK_HEIGHT / 2.
-    const bottomY = Math.floor(p.y / PLATE_HEIGHT) * PLATE_HEIGHT;
-    y = bottomY + BRICK_HEIGHT / 2;
+    // If hitting another brick, get the root group object which has userData and position
+    let baseBrick = intersect.object;
+    while (baseBrick.parent && baseBrick.parent.type !== 'Scene') {
+      baseBrick = baseBrick.parent;
+    }
+
+    if (intersect.normal.y > 0.5) {
+      // Snapping to the TOP of another brick
+      const baseY = baseBrick.position.y;
+      const baseHeight = baseBrick.userData.physicalHeight;
+      y = baseY + (baseHeight / 2) + (actualHeight / 2);
+    } else {
+      // Snapping to the side of another brick
+      const bottomY = Math.floor(p.y / PLATE_HEIGHT) * PLATE_HEIGHT;
+      y = bottomY + actualHeight / 2;
+    }
   }
 
   return new THREE.Vector3(x, y, z);
@@ -189,7 +201,7 @@ function snapToGrid(intersect) {
 
 function placeBrick(intersect) {
   const pos = snapToGrid(intersect);
-  const brick = createLegoPiece(currentWidth, currentDepth, isPlate);
+  const brick = createLegoPiece(currentWidth, currentDepth, currentHeight);
   brick.position.copy(pos);
   scene.add(brick);
   pieces.push(brick);
@@ -286,7 +298,7 @@ window.addEventListener('resize', () => {
 // ===== UI SETUP =====
 const widthInput = document.getElementById('piece-width');
 const depthInput = document.getElementById('piece-depth');
-const plateInput = document.getElementById('piece-plate');
+const heightInput = document.getElementById('piece-height');
 
 widthInput.addEventListener('input', (e) => {
   currentWidth = Math.max(1, Math.min(16, parseInt(e.target.value) || 1));
@@ -298,8 +310,8 @@ depthInput.addEventListener('input', (e) => {
   createPreview();
 });
 
-plateInput.addEventListener('change', (e) => {
-  isPlate = e.target.checked;
+heightInput.addEventListener('input', (e) => {
+  currentHeight = Math.max(1, Math.min(50, parseInt(e.target.value) || 1));
   createPreview();
 });
 
